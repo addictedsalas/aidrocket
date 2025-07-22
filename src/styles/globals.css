@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
+  body {
+    @apply bg-slate-900 text-gray-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  /* Chat interface components */
+  .chat-container {
+    @apply bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50;
+  }
+  
+  .chat-message {
+    @apply bg-slate-800/60 backdrop-blur-sm border border-slate-700/40 rounded-xl p-4;
+  }
+  
+  .chat-input {
+    @apply bg-slate-800/60 backdrop-blur-sm border border-slate-600/50 rounded-xl px-4 py-3 text-gray-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all;
+  }
+  
+  .suggestion-card {
+    @apply bg-slate-800/40 hover:bg-slate-700/60 backdrop-blur-sm border border-slate-600/30 rounded-lg p-3 cursor-pointer transition-all duration-200 hover:border-blue-500/40;
+  }
+  
+  .icon-button {
+    @apply bg-slate-800/60 hover:bg-slate-700/80 backdrop-blur-sm border border-slate-600/40 rounded-full p-3 transition-all duration-200 hover:border-blue-500/40;
+  }
+  
+  .primary-button {
+    @apply bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-xl transition-colors duration-200;
+  }
+  
+  .ai-avatar {
+    @apply bg-white rounded-2xl p-3 shadow-lg;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.5);
+}
