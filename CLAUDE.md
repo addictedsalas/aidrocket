@@ -13,10 +13,10 @@ Aid Rocket is a no-BS home-buying advisor that provides honest breakdowns of cas
 - **Frontend**: Next.js 15.4.3, React 18.3.0, TypeScript, Tailwind CSS 3.4.15 (Airbnb-style glass-morphism)
 - **Backend**: Next.js API Routes (no separate Express server)
 - **API**: tRPC 11.0.0-rc.553 (end-to-end typed)
-- **Auth**: Clerk 6.11.8
+- **Auth**: NextAuth.js 4.24.8 (replaced Clerk for simplicity)
 - **Database**: Supabase (PostgreSQL) with Drizzle ORM 0.36.4
 - **Storage**: Vercel Blob (for programs.csv)
-- **AI**: OpenAI 4.73.0 GPT-4o
+- **AI**: OpenAI 4.73.0 GPT-4o-mini (with function calling)
 - **Hosting**: Vercel (all-in-one)
 - **External APIs**: MortgageNewsDaily/FRED for rates
 - **Email/PDF**: Resend + react-pdf
@@ -68,8 +68,8 @@ aid-rocket/
 - `DATABASE_URL` - Supabase PostgreSQL connection string
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Supabase anonymous key
-- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` - Clerk publishable key
-- `CLERK_SECRET_KEY` - Clerk secret key
+- `NEXTAUTH_SECRET` - NextAuth secret for JWT encryption
+- `NEXTAUTH_URL` - Application URL for NextAuth callbacks
 - `OPENAI_API_KEY` - OpenAI GPT-4o API key
 - `BLOB_READ_WRITE_TOKEN` - Vercel Blob storage token
 - `RESEND_API_KEY` - Resend email service key
@@ -81,56 +81,66 @@ aid-rocket/
 
 ## Current Implementation Status
 
-### ✅ **COMPLETED (Foundation)**
+### ✅ **COMPLETED (Major Features)**
 - **Project Setup**: Next.js 15, React 18, TypeScript, Tailwind CSS with glass-morphism design
-- **Database Schema**: Complete Drizzle ORM schema (users, properties, analyses, shareLinks)
-- **tRPC API**: Full server setup with authentication context and property router
-- **Authentication Framework**: Clerk integration in tRPC context (NOT yet in layout)
-- **UI System**: Landing page with chat interface and suggestion cards
-- **Development Tools**: All npm scripts functional (dev, build, lint, typecheck, db commands)
+- **Database Schema**: Complete Drizzle ORM schema with NextAuth tables (users, accounts, sessions, properties, analyses, shareLinks)
+- **Authentication**: Full NextAuth.js integration with Google provider and database sessions
+- **Property Parser**: OpenAI GPT-4o-mini powered property parsing with function calling
+- **Buyer Questionnaire**: 3-step wizard with React Hook Form, Zod validation, and progress tracking
+- **tRPC API**: Complete server setup with property and analysis routers
+- **UI System**: Landing page, property display, questionnaire components with glass-morphism design
+- **Type Safety**: Full TypeScript integration throughout with proper error handling
+- **Testing Components**: Test pages for parser (`/test-parser`) and questionnaire (`/test-questionnaire`)
 
-### ⚠️ **CRITICAL SETUP REQUIRED**
-1. **Provider Integration**: Layout missing ClerkProvider and TrpcProvider wrappers
-2. **Database Initialization**: Run `npm run db:push` to create actual tables in Supabase
-3. **Environment Variables**: Set up actual API keys per `.env.local.example`
+### ⚠️ **READY FOR NEXT PHASE**
+- Database initialized and working with NextAuth + property/analysis tables
+- OpenAI integration functional for property parsing
+- Foundation ready for AI Down-Payment Guru implementation
 
-### ❌ **NOT IMPLEMENTED (Core Features)**
-- Listing parser implementation (property.parseUrl is placeholder)
-- Questionnaire wizard and React Hook Form components
-- AI Down-Payment Guru and OpenAI integration
-- Scenario calculator logic and mortgage utilities
-- Results display components and PDF generation
-- External API integrations (SerpAPI, MortgageNewsDaily, Resend)
+### ❌ **NOT IMPLEMENTED (Next Features)**
+- AI Down-Payment Guru with CSV program catalog
+- Scenario calculator logic (MIN_CASH, BALANCED, AGGRESSIVE)
+- Results display components with payment breakdowns
+- PDF generation and sharing functionality
+- External API integrations (MortgageNewsDaily, Resend)
 
 ## Architecture Details
 
 ### tRPC API Structure
-- **Context**: `src/server/context.ts` provides database connection and Clerk user authentication
-- **Main Router**: `src/server/routers/_app.ts` combines all feature routers
-- **Property Router**: `src/server/routers/property.ts` handles CRUD for properties table
-  - `property.create` - Create new property with Zod validation
+- **Context**: `src/server/context.ts` provides database connection (auth temporarily disabled for testing)
+- **Main Router**: `src/server/routers/_app.ts` combines property and analysis routers
+- **Property Router**: `src/server/routers/property.ts` handles property operations
+  - `property.create` - Create new property with full validation
   - `property.getById` - Fetch single property by ID
-  - `property.getUserProperties` - Get all user properties with auth
-  - `property.parseUrl` - Parse listing URLs (placeholder implementation)
+  - `property.getUserProperties` - Get all user properties
+  - `property.parseUrl` - **IMPLEMENTED**: OpenAI-powered property parsing from Zillow/Redfin/Realtor URLs
+- **Analysis Router**: `src/server/routers/analysis.ts` handles buyer questionnaires
+  - `analysis.create` - Save buyer profile and generate placeholder scenarios
+  - `analysis.getById` - Fetch analysis with property relationship
 - **Client Setup**: `src/lib/trpc.ts` configures React Query integration with Superjson transformer
 - **API Route**: `src/app/api/trpc/[trpc]/route.ts` handles all tRPC endpoints
 
 ### Database Schema (Drizzle)
 Located in `src/lib/db/schema.ts`:
-- **users**: Clerk user integration with UUID primary keys
-- **properties**: Property listings with source URL tracking
-- **analyses**: User questionnaires with JSONB scenarios field
-- **shareLinks**: Public sharing functionality for analyses
+- **NextAuth Tables**: `users`, `accounts`, `sessions`, `verificationTokens` for authentication
+- **properties**: Complete property data with enhanced fields (sqft, yearBuilt, lotSize, propertyType, description)
+- **analyses**: User questionnaires with buyer profile (income, household size, credit, veteran status, etc.)
+- **shareLinks**: Public sharing functionality for analyses (ready for implementation)
 - Use `npm run db:studio` to inspect data, `npm run db:push` to sync schema changes
 
 ### Component Architecture
-- **Providers**: `src/components/providers/TrpcProvider.tsx` wraps React Query (NOT yet integrated in layout)
+- **Providers**: Fully integrated TrpcProvider and SessionProvider in root layout
+- **Authentication**: NextAuth.js signin page at `/auth/signin` with Google provider
+- **Main Components**:
+  - `BuyerQuestionnaire.tsx` - 3-step wizard with React Hook Form validation
+  - Property parsing integrated directly in homepage with loading states
 - **Styling**: Custom glass-morphism components in `src/styles/globals.css`:
   - `.glass-container` - Main glass effect with backdrop blur
   - `.glass-button` - Interactive button styling
   - `.chat-container`, `.chat-input` - Conversational UI components
+  - `.suggestion-card` - Hover effects for feature cards
 - **Theme**: Dark slate with brand colors defined in `tailwind.config.ts`
-- **Layout**: Root layout in `src/app/layout.tsx` (missing provider integration)
+- **Layout**: Root layout with proper provider integration and NextAuth session handling
 
 ### Key Development Patterns
 - All database operations use Drizzle ORM with type inference
@@ -140,26 +150,50 @@ Located in `src/lib/db/schema.ts`:
 
 ## Quick Start Setup
 
-### 1. Fix Provider Integration (CRITICAL)
-The app currently won't work due to missing providers in layout. Add to `src/app/layout.tsx`:
-```tsx
-import { ClerkProvider } from '@clerk/nextjs'
-import TrpcProvider from '@/components/providers/TrpcProvider'
-
-// Wrap children with both providers
+### 1. Environment Setup
+Copy `.env.local.example` to `.env.local` and add:
+```bash
+DATABASE_URL="your-supabase-connection-string"
+NEXTAUTH_SECRET="your-random-secret-key"
+NEXTAUTH_URL="http://localhost:3000"
+OPENAI_API_KEY="your-openai-api-key"
+# Add Google OAuth credentials for authentication
 ```
 
 ### 2. Database Setup
 ```bash
-npm run db:push    # Creates tables in Supabase
+npm run db:push    # Creates all tables in Supabase
 npm run db:studio  # Verify tables created
 ```
 
-### 3. Environment Setup
-Copy `.env.local.example` to `.env.local` and add real API keys.
+### 3. Test Implementation
+- Visit `/test-parser` to test property parsing with real Zillow/Redfin URLs
+- Visit `/test-questionnaire` to test the buyer questionnaire flow
+- Main app at `/` integrates both features with authentication
+
+## Key Implementation Details
+
+### OpenAI Property Parser (`src/lib/openai-property-parser.ts`)
+- Uses GPT-4o-mini with function calling for structured data extraction
+- Handles Zillow, Redfin, and Realtor.com URLs
+- Extracts: address, price, beds/baths, sqft, year built, property type, description
+- Robust error handling with fallback responses
+
+### Buyer Questionnaire System
+- 3-step progressive wizard: Basic Info → Financial Details → Special Status
+- React Hook Form with Zod validation for type safety
+- Real-time form state management and error display
+- Saves complete buyer profile to database for AI Guru analysis
+
+### Authentication Flow
+- NextAuth.js with database sessions (not JWT)
+- Google OAuth integration ready
+- Session management throughout tRPC context
+- Sign in/out functionality integrated in main layout
 
 ## Notes
 - Use Drizzle ORM for all database operations (type-safe SQL)
 - Follow tRPC best practices for type-safe APIs
-- Programs CSV stored in Vercel Blob, grows through AI Guru discoveries
+- OpenAI function calling provides structured property data
+- Programs CSV will be stored in Vercel Blob for AI Guru discoveries
 - Keep solutions simple - single Next.js app (no separate backend)
