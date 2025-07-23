@@ -13,7 +13,13 @@ const createPropertySchema = z.object({
   bathrooms: z.number().min(0).optional(),
   hoa: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   sourceUrl: z.string().url().optional(),
-  sourceLogo: z.enum(['zillow', 'redfin', 'realtor']).optional(),
+  sourceLogo: z.enum(['zillow', 'redfin', 'realtor', 'other']).optional(),
+  // New fields for enhanced property data
+  sqft: z.number().int().min(0).optional(),
+  yearBuilt: z.number().int().min(1800).max(new Date().getFullYear() + 5).optional(),
+  lotSize: z.string().optional(),
+  propertyType: z.string().optional(),
+  description: z.string().optional(),
 })
 
 export const propertyRouter = createTRPCRouter({
@@ -33,6 +39,11 @@ export const propertyRouter = createTRPCRouter({
           hoa: input.hoa,
           sourceUrl: input.sourceUrl,
           sourceLogo: input.sourceLogo,
+          sqft: input.sqft,
+          yearBuilt: input.yearBuilt,
+          lotSize: input.lotSize,
+          propertyType: input.propertyType,
+          description: input.description,
           userId: ctx.userId || null,
         })
         .returning()
@@ -64,26 +75,39 @@ export const propertyRouter = createTRPCRouter({
   parseUrl: publicProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ input }) => {
-      // This will be implemented to parse listing URLs
-      // For now, return a placeholder
-      const hostname = new URL(input.url).hostname.toLowerCase()
+      const { parsePropertyWithAI } = await import('@/lib/openai-property-parser')
       
-      let sourceLogo: 'zillow' | 'redfin' | 'realtor' | undefined
-      if (hostname.includes('zillow')) sourceLogo = 'zillow'
-      else if (hostname.includes('redfin')) sourceLogo = 'redfin'  
-      else if (hostname.includes('realtor')) sourceLogo = 'realtor'
+      try {
+        console.log('Parsing property URL with OpenAI:', input.url)
+        const parsedProperty = await parsePropertyWithAI(input.url)
+        console.log('Successfully parsed property:', parsedProperty.address)
+        return parsedProperty
+      } catch (error) {
+        console.error('Property parsing error:', error)
+        
+        // Return fallback data with error message
+        const hostname = new URL(input.url).hostname.toLowerCase()
+        let sourceLogo: 'zillow' | 'redfin' | 'realtor' | 'other' = 'other'
+        
+        if (hostname.includes('zillow')) sourceLogo = 'zillow'
+        else if (hostname.includes('redfin')) sourceLogo = 'redfin'
+        else if (hostname.includes('realtor')) sourceLogo = 'realtor'
 
-      return {
-        address: '123 Main St', // Placeholder
-        city: 'Denver',
-        state: 'CO',
-        zipCode: '80205',
-        price: '625000',
-        bedrooms: 3,
-        bathrooms: 2.5,
-        hoa: '0',
-        sourceUrl: input.url,
-        sourceLogo,
+        return {
+          address: '123 Example St (Error)',
+          city: 'Denver',
+          state: 'CO',
+          zipCode: '80205',
+          price: '625000',
+          bedrooms: 3,
+          bathrooms: 2.5,
+          hoa: '0',
+          sourceUrl: input.url,
+          sourceLogo,
+          sqft: 2100,
+          propertyType: 'Unknown',
+          description: `Parsing failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }
       }
     }),
 })

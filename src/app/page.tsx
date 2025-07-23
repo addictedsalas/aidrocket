@@ -1,9 +1,104 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession, signIn, signOut } from 'next-auth/react'
+import { api } from '@/lib/trpc'
+import { Paperclip, Mic, Send } from 'lucide-react'
+import BuyerQuestionnaire from '@/components/BuyerQuestionnaire'
+
+type Analysis = Record<string, unknown>
+
+type ParsedProperty = {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+  userId: string | null
+  address: string
+  city: string
+  state: string
+  zipCode: string
+  price: string
+  bedrooms: number | null
+  bathrooms: string | null
+  sourceLogo: string | null
+  sourceUrl: string | null
+  propertyType: string | null
+  sqft: number | null
+  yearBuilt: number | null
+  lotSize: string | null
+  hoa: string | null
+  description: string | null
+  error?: string
+}
 
 export default function HomePage() {
   const [message, setMessage] = useState('')
+  const [parsedProperty, setParsedProperty] = useState<ParsedProperty | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showQuestionnaire, setShowQuestionnaire] = useState(false)
+  const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const { data: session } = useSession()
+
+  const createProperty = api.property.create.useMutation({
+    onSuccess: (property) => {
+      setParsedProperty(property)
+      setIsLoading(false)
+    },
+    onError: (error) => {
+      console.error('Create property error:', error)
+      setIsLoading(false)
+    }
+  })
+
+  const parseUrl = api.property.parseUrl.useMutation({
+    onSuccess: (data) => {
+      // Save the parsed property to database
+      createProperty.mutate({
+        address: data.address,
+        city: data.city,
+        state: data.state,
+        zipCode: data.zipCode,
+        price: data.price,
+        bedrooms: data.bedrooms,
+        bathrooms: data.bathrooms,
+        hoa: data.hoa || '0',
+        sourceUrl: data.sourceUrl,
+        sourceLogo: data.sourceLogo,
+        sqft: data.sqft,
+        yearBuilt: data.yearBuilt,
+        lotSize: data.lotSize,
+        propertyType: data.propertyType,
+        description: data.description,
+      })
+    },
+    onError: (error) => {
+      console.error('Parse error:', error)
+      setIsLoading(false)
+    }
+  })
+
+  const handleSubmit = () => {
+    if (!message.trim()) return
+
+    // Check if message looks like a URL
+    const urlPattern = /(https?:\/\/[^\s]+)/gi
+    const urls = message.match(urlPattern)
+    
+    if (urls && urls.length > 0) {
+      const url = urls[0]
+      // Check if it's a supported listing site
+      if (url.includes('zillow.com') || url.includes('redfin.com') || url.includes('realtor.com')) {
+        setIsLoading(true)
+        parseUrl.mutate({ url })
+        setMessage('')
+        return
+      }
+    }
+    
+    // For non-URL messages, just log for now
+    console.log('Sending message:', message)
+    setMessage('')
+  }
 
   const suggestions = [
     {
@@ -47,12 +142,24 @@ export default function HomePage() {
           </div>
           <span className="text-gray-100 font-medium">Aid Rocket</span>
         </div>
-        <button className="icon-button">
-          <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
+{session ? (
+          <div className="flex items-center gap-3">
+            <span className="text-gray-300 text-sm">Welcome, {session.user?.name || session.user?.email}</span>
+            <button 
+              onClick={() => signOut()}
+              className="text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <button 
+            onClick={() => signIn()}
+            className="glass-button px-4 py-2 text-white"
+          >
+            Sign In
+          </button>
+        )}
       </header>
 
       {/* Main Content */}
@@ -100,6 +207,142 @@ export default function HomePage() {
           ))}
         </div>
 
+        {/* Property Display */}
+        {(isLoading || parsedProperty) && (
+          <div className="mb-8">
+            {isLoading ? (
+              <div className="glass-container p-6 text-center">
+                <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-300">AI is analyzing the property listing...</p>
+                <p className="text-sm text-gray-400 mt-2">Extracting details with GPT-4o-mini</p>
+              </div>
+            ) : parsedProperty && (
+              <div className="glass-container p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-white">Property Details</h3>
+                  <span className="text-sm text-gray-400 capitalize bg-gray-700 px-3 py-1 rounded-full">
+                    {parsedProperty.sourceLogo || 'Unknown'}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <div className="text-gray-300">
+                      <span className="text-gray-400">Address:</span> {parsedProperty.address}
+                    </div>
+                    <div className="text-gray-300">
+                      <span className="text-gray-400">Location:</span> {parsedProperty.city}, {parsedProperty.state} {parsedProperty.zipCode}
+                    </div>
+                    <div className="text-2xl font-bold text-blue-400">
+                      ${parseInt(parsedProperty.price).toLocaleString()}
+                    </div>
+                    {parsedProperty.propertyType && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Type:</span> {parsedProperty.propertyType}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex gap-4">
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Beds:</span> {parsedProperty.bedrooms || 'N/A'}
+                      </div>
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Baths:</span> {parsedProperty.bathrooms || 'N/A'}
+                      </div>
+                    </div>
+                    {parsedProperty.sqft && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Square Feet:</span> {parsedProperty.sqft.toLocaleString()} sq ft
+                      </div>
+                    )}
+                    {parsedProperty.yearBuilt && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Year Built:</span> {parsedProperty.yearBuilt}
+                      </div>
+                    )}
+                    {parsedProperty.lotSize && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">Lot Size:</span> {parsedProperty.lotSize}
+                      </div>
+                    )}
+                    {parsedProperty.hoa && parsedProperty.hoa !== '0' && (
+                      <div className="text-gray-300">
+                        <span className="text-gray-400">HOA:</span> ${parsedProperty.hoa}/month
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {parsedProperty.description && (
+                  <div className="mt-4 p-4 bg-gray-800/50 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-400 mb-2">Description</h4>
+                    <p className="text-gray-300 text-sm leading-relaxed">{parsedProperty.description}</p>
+                  </div>
+                )}
+
+                {parsedProperty.error && (
+                  <div className="mt-4 bg-yellow-900/50 border border-yellow-500 text-yellow-200 p-3 rounded text-sm">
+                    <strong>Note:</strong> {parsedProperty.error} (Showing demo data)
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-3">
+                  <button 
+                    onClick={() => setShowQuestionnaire(true)}
+                    className="glass-button px-4 py-2 text-white"
+                  >
+                    Analyze This Property
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setParsedProperty(null)
+                      setShowQuestionnaire(false)
+                      setAnalysis(null)
+                    }}
+                    className="text-gray-400 hover:text-white transition-colors px-4 py-2"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Buyer Questionnaire */}
+        {showQuestionnaire && parsedProperty && (
+          <div className="mb-8">
+            <BuyerQuestionnaire
+              propertyId={parsedProperty.id}
+              onComplete={(analysisData) => {
+                setAnalysis(analysisData as Analysis)
+                setShowQuestionnaire(false)
+              }}
+              onClose={() => setShowQuestionnaire(false)}
+            />
+          </div>
+        )}
+
+        {/* Analysis Results */}
+        {analysis && (
+          <div className="mb-8">
+            <div className="glass-container p-6">
+              <h3 className="text-xl font-bold text-white mb-4">Analysis Complete</h3>
+              <p className="text-gray-300">
+                Great! We&apos;ve analyzed your buyer profile for this property. 
+                Next, our AI Down-Payment Guru will find assistance programs for you.
+              </p>
+              <div className="mt-4">
+                <button className="glass-button px-4 py-2 text-white">
+                  Find Down Payment Programs
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Chat Input */}
         <div className="chat-container p-4">
           <div className="flex gap-3">
@@ -109,28 +352,27 @@ export default function HomePage() {
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Paste a property link or ask me anything..."
               className="chat-input flex-1"
+              disabled={isLoading}
               onKeyPress={(e) => {
-                if (e.key === 'Enter' && message.trim()) {
-                  console.log('Sending message:', message)
-                  setMessage('')
+                if (e.key === 'Enter' && message.trim() && !isLoading) {
+                  handleSubmit()
                 }
               }}
             />
             <div className="flex gap-2">
-              <button className="icon-button">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
+              <button className="icon-button" title="Attach file">
+                <Paperclip className="w-5 h-5 text-gray-400" />
               </button>
-              <button className="icon-button">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
+              <button className="icon-button" title="Voice input">
+                <Mic className="w-5 h-5 text-gray-400" />
               </button>
-              <button className="icon-button">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                </svg>
+              <button 
+                onClick={handleSubmit}
+                disabled={!message.trim() || isLoading}
+                className="glass-button px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-600/20 transition-colors"
+                title={message.trim() ? "Send message" : "Type something to send"}
+              >
+                <Send className={`w-5 h-5 transition-colors ${message.trim() && !isLoading ? 'text-blue-400' : 'text-gray-400'}`} />
               </button>
             </div>
           </div>
